@@ -1,0 +1,39 @@
+# 虚拟环境
+venv/
+env/
+.venv/
+.env/
+
+# Python编译文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# 日志文件
+*.log
+
+# 数据库
+*.db
+*.sqlite3
+
+# IDE相关
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统相关
+.DS_Store
+Thumbs.db
+
+# 环境变量文件
+.env
+.env.local
+.env.*.local
+
+# 临时文件
+*.tmp
+*.temp
