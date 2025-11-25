@@ -28,6 +28,38 @@ class Choices(Base):
         return f"<Choice(id={self.id}, text='{self.choice_text}', correct={self.is_correct})>"
 
 
+class Role(Base):
+    __tablename__ = "roles"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False)
+    # 权限以逗号分隔的形式存储
+    permissions = Column(String, nullable=False)
+    
+    def __repr__(self):
+        return f"<Role(id={self.id}, name='{self.name}')>"
+    
+    def get_permissions(self):
+        """获取角色的所有权限列表"""
+        if self.permissions:
+            return self.permissions.split(',')
+        return []
+    
+    def add_permission(self, permission):
+        """为角色添加权限"""
+        perms = self.get_permissions()
+        if permission not in perms:
+            perms.append(permission)
+            self.permissions = ','.join(perms)
+    
+    def remove_permission(self, permission):
+        """为角色移除权限"""
+        perms = self.get_permissions()
+        if permission in perms:
+            perms.remove(permission)
+            self.permissions = ','.join(perms)
+
+
 class User(Base):
     __tablename__ = "users"
     

@@ -13,7 +13,7 @@ import asyncio
 import traceback
 from typing import Annotated, List, Union, Optional
 from base import Base  # 从基础模块导入
-from models import User, UserSession  # 导入用户和用户会话模型
+from models import User, UserSession, Role  # 导入用户、用户会话和角色模型
 from sqlalchemy.orm import joinedload
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, ValidationError
@@ -690,6 +690,246 @@ def main_page(request: Request):
                     # 添加底部间距
                     ui.element().classes("h-16")
                     
+                    # 添加用户管理区域 - 仅管理员可见
+                    if user and user.get("role") == "administrator":
+                        with ui.expansion("👥 用户管理", icon="manage_accounts").classes("w-full"):
+                            with ui.card().classes("w-full"):
+                                # 添加创建用户按钮
+                                def open_create_user_dialog():
+                                    # 获取所有角色用于选择
+                                    db = SessionLocal()
+                                    roles = db.query(Role).all()
+                                    role_options = {role.name: role.name for role in roles}
+                                    db.close()
+                                    
+                                    with ui.dialog() as create_user_dialog, ui.card():
+                                        ui.label("创建新用户").classes("text-h6")
+                                        
+                                        # 用户名输入
+                                        username_input = ui.input(label="用户名", placeholder="输入用户名").classes("w-full")
+                                        
+                                        # 密码输入
+                                        password_input = ui.input(label="密码", placeholder="输入密码", password=True).classes("w-full")
+                                        
+                                        # 角色选择
+                                        role_select = ui.select(role_options, label="角色", value="user").classes("w-full")
+                                        
+                                        # 状态标签
+                                        status_label = ui.label("").classes("w-full text-center")
+                                        
+                                        # 创建用户函数
+                                        def create_user():
+                                            username = username_input.value
+                                            password = password_input.value
+                                            role = role_select.value
+                                            
+                                            # 验证输入
+                                            if not username or not password:
+                                                status_label.set_text("用户名和密码不能为空")
+                                                return
+                                            
+                                            if len(password) < 3:
+                                                status_label.set_text("密码长度至少3位")
+                                                return
+                                            
+                                            # 创建用户
+                                            db = SessionLocal()
+                                            try:
+                                                # 检查用户名是否已存在
+                                                existing_user = db.query(models.User).filter(models.User.username == username).first()
+                                                if existing_user:
+                                                    status_label.set_text("用户名已存在")
+                                                    return
+                                                
+                                                # 检查角色是否存在
+                                                role_exists = db.query(Role).filter(Role.name == role).first()
+                                                if not role_exists:
+                                                    status_label.set_text("选择的角色不存在")
+                                                    return
+                                                
+                                                # 创建新用户
+                                                new_user = models.User(username=username, role=role)
+                                                new_user.set_password(password)
+                                                db.add(new_user)
+                                                db.commit()
+                                                db.refresh(new_user)
+                                                
+                                                status_label.set_text("用户创建成功")
+                                                ui.notify("用户创建成功", type="positive")
+                                                
+                                                # 清空输入
+                                                username_input.set_value("")
+                                                password_input.set_value("")
+                                                role_select.set_value("user")
+                                                
+                                            except Exception as e:
+                                                db.rollback()
+                                                logging.error(f"创建用户失败: {str(e)}")
+                                                status_label.set_text(f"创建用户失败: {str(e)}")
+                                                ui.notify("创建用户失败", type="negative")
+                                            finally:
+                                                db.close()
+                                        
+                                        with ui.row():
+                                            ui.button("创建", on_click=create_user, color="primary")
+                                            ui.button("取消", on_click=create_user_dialog.close)
+                                    
+                                    create_user_dialog.open()
+                                
+                                ui.button("新增用户", on_click=open_create_user_dialog, icon="add").classes("mb-4")
+                                
+                                # 用户列表显示
+                                user_list_container = ui.column().classes("w-full")
+                                
+                                # 加载用户列表的函数
+                                def load_users():
+                                    user_list_container.clear()
+                                    db = SessionLocal()
+                                    try:
+                                        users = db.query(models.User).all()
+                                        with user_list_container:
+                                            with ui.row().classes("w-full p-2 bg-gray-100 font-bold"):
+                                                ui.label("ID").classes("w-16")
+                                                ui.label("用户名").classes("flex-1")
+                                                ui.label("角色").classes("w-32")
+                                                ui.label("操作").classes("w-32")
+                                            
+                                            for user_item in users:
+                                                with ui.row().classes("w-full p-2 border-b"):
+                                                    ui.label(str(user_item.id)).classes("w-16")
+                                                    ui.label(user_item.username).classes("flex-1")
+                                                    ui.label(user_item.role).classes("w-32")
+                                                    ui.label("").classes("w-32")  # 占位，未来可以添加编辑/删除功能
+                                    except Exception as e:
+                                        logging.error(f"加载用户列表失败: {str(e)}")
+                                        ui.notify("加载用户列表失败", type="negative")
+                                    finally:
+                                        db.close()
+                                
+                                # 初始化加载用户列表
+                                load_users()
+                        
+                        # 角色管理区域
+                        with ui.expansion("🔑 角色管理", icon="key").classes("w-full mt-4"):
+                            with ui.card().classes("w-full"):
+                                # 添加创建角色按钮
+                                def open_create_role_dialog():
+                                    with ui.dialog() as create_role_dialog, ui.card():
+                                        ui.label("创建新角色").classes("text-h6")
+                                        
+                                        # 角色名输入
+                                        role_name_input = ui.input(label="角色名", placeholder="输入角色名").classes("w-full")
+                                        
+                                        # 权限选择
+                                        permissions = {
+                                            "questions:read": "查看问题",
+                                            "questions:write": "创建/编辑问题",
+                                            "questions:delete": "删除问题",
+                                            "process:config": "流程配置"
+                                        }
+                                        
+                                        ui.label("权限配置").classes("font-bold mt-4 mb-2")
+                                        permission_checkboxes = {}
+                                        for perm, desc in permissions.items():
+                                            permission_checkboxes[perm] = ui.checkbox(desc, value=False).classes("w-full")
+                                        
+                                        # 状态标签
+                                        status_label = ui.label("").classes("w-full text-center mt-2")
+                                        
+                                        # 创建角色函数
+                                        def create_role():
+                                            role_name = role_name_input.value
+                                            
+                                            # 验证输入
+                                            if not role_name:
+                                                status_label.set_text("角色名不能为空")
+                                                return
+                                            
+                                            # 获取选中的权限
+                                            selected_permissions = [
+                                                perm for perm, checkbox in permission_checkboxes.items() 
+                                                if checkbox.value
+                                            ]
+                                            
+                                            # 创建角色
+                                            db = SessionLocal()
+                                            try:
+                                                # 检查角色是否已存在
+                                                existing_role = db.query(Role).filter(Role.name == role_name).first()
+                                                if existing_role:
+                                                    status_label.set_text("角色名已存在")
+                                                    return
+                                                
+                                                # 创建新角色
+                                                new_role = Role(
+                                                    name=role_name,
+                                                    permissions=",".join(selected_permissions)
+                                                )
+                                                db.add(new_role)
+                                                db.commit()
+                                                db.refresh(new_role)
+                                                
+                                                status_label.set_text("角色创建成功")
+                                                ui.notify("角色创建成功", type="positive")
+                                                
+                                                # 清空输入
+                                                role_name_input.set_value("")
+                                                for checkbox in permission_checkboxes.values():
+                                                    checkbox.set_value(False)
+                                                    
+                                            except Exception as e:
+                                                db.rollback()
+                                                logging.error(f"创建角色失败: {str(e)}")
+                                                status_label.set_text(f"创建角色失败: {str(e)}")
+                                                ui.notify("创建角色失败", type="negative")
+                                            finally:
+                                                db.close()
+                                        
+                                        with ui.row():
+                                            ui.button("创建", on_click=create_role, color="primary")
+                                            ui.button("取消", on_click=create_role_dialog.close)
+                                    
+                                    create_role_dialog.open()
+                                
+                                ui.button("新增角色", on_click=open_create_role_dialog, icon="add").classes("mb-4")
+                                
+                                # 角色列表显示
+                                role_list_container = ui.column().classes("w-full")
+                                
+                                # 加载角色列表的函数
+                                def load_roles():
+                                    role_list_container.clear()
+                                    db = SessionLocal()
+                                    try:
+                                        roles = db.query(Role).all()
+                                        with role_list_container:
+                                            with ui.row().classes("w-full p-2 bg-gray-100 font-bold"):
+                                                ui.label("ID").classes("w-16")
+                                                ui.label("角色名").classes("flex-1")
+                                                ui.label("权限").classes("flex-1")
+                                                ui.label("操作").classes("w-32")
+                                            
+                                            for role in roles:
+                                                with ui.row().classes("w-full p-2 border-b"):
+                                                    ui.label(str(role.id)).classes("w-16")
+                                                    ui.label(role.name).classes("flex-1")
+                                                    
+                                                    # 显示权限
+                                                    permissions = role.get_permissions()
+                                                    permissions_display = ", ".join(permissions) if permissions else "无权限"
+                                                    ui.label(permissions_display).classes("flex-1")
+                                                    
+                                                    # 操作按钮占位
+                                                    ui.label("").classes("w-32")
+                                    except Exception as e:
+                                        logging.error(f"加载角色列表失败: {str(e)}")
+                                        ui.notify("加载角色列表失败", type="negative")
+                                    finally:
+                                        db.close()
+                                
+                                # 初始化加载角色列表
+                                load_roles()
+                    
                     # 页面加载完成后自动加载问题列表
                     ui.timer(0.1, lambda: asyncio.create_task(load_questions(question_list_container, user)), once=True)
             
@@ -799,10 +1039,10 @@ async def load_questions(container, user=None):
                                                 db.close()
                                                 logging.error(f"删除问题失败: {str(e)}")
                                                 ui.notify(f"删除问题失败: {str(e)}", type="negative")
-                                        return delete_handler
-                                    
-                                    ui.button("🗑️", on_click=make_delete_handler(question.id), 
-                                             color="red").classes("text-sm")
+                                            return delete_handler
+                                        
+                                        ui.button("🗑️", on_click=make_delete_handler(question.id), 
+                                                 color="red").classes("text-sm")
                                 else:
                                     ui.label("只读").classes("text-gray-400 text-sm")
     except Exception as e:
@@ -810,7 +1050,6 @@ async def load_questions(container, user=None):
         logging.error(f"详细错误信息: {traceback.format_exc()}")
         with container:
             ui.label(f"加载失败: {str(e)}").classes("w-full text-center text-red-500 py-4")
-
 
 async def load_process_config():
     """从数据库加载流程配置"""
@@ -846,6 +1085,25 @@ def init_users(db: Session):
         logging.info("已创建初始用户: admin和user")
     else:
         logging.info("用户已存在，跳过初始化")
+    
+    # 检查是否已有角色
+    admin_role = db.query(Role).filter(Role.name == "administrator").first()
+    if not admin_role:
+        # 创建管理员角色
+        admin_role = Role(
+            name="administrator",
+            permissions="questions:read,questions:write,questions:delete,process:config"
+        )
+        db.add(admin_role)
+        
+        # 创建普通用户角色
+        user_role = Role(name="user", permissions="questions:read")
+        db.add(user_role)
+        
+        db.commit()
+        logging.info("已创建初始角色: administrator和user")
+    else:
+        logging.info("角色已存在，跳过初始化")
 
 # 数据库依赖项
 def get_db():
@@ -918,12 +1176,17 @@ async def login_api(username: str = Form(...), password: str = Form(...), db: db
     if not user:
         raise HTTPException(status_code=400, detail="用户名或密码错误")
     
-    # 根据用户角色定义权限范围
+    # 根据用户角色从数据库获取权限范围
+    role_record = db.query(Role).filter(Role.name == user.role).first()
     scopes = []
-    if user.role == "administrator":
-        scopes = ["questions:read", "questions:write", "questions:delete", "process:config"]
-    elif user.role == "user":
-        scopes = ["questions:read"]
+    if role_record:
+        scopes = role_record.get_permissions()
+    else:
+        # 兼容旧的角色处理方式
+        if user.role == "administrator":
+            scopes = ["questions:read", "questions:write", "questions:delete", "process:config"]
+        elif user.role == "user":
+            scopes = ["questions:read"]
     
     session_token = secrets.token_urlsafe(16)
     
