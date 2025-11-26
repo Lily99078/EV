@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      - DB_USER=postgres
+      - DB_PASSWORD=Huiteng888
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=QuizApplicationYT
+    depends_on:
+      - db
+    networks:
+      - ev-network
+
+  db:
+    image: postgres:13-alpine
+    environment:
+      - POSTGRES_DB=QuizApplicationYT
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=Huiteng888
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - ev-network
+
+volumes:
+  postgres_data:
+
+networks:
+  ev-network:
+    driver: bridge

@@ -4,14 +4,14 @@
 
 ## 技术栈
 
-- 后端: FastAPI==0.104.1（异步框架）
-- 前端: NiceGUI==1.4.13（Python 原生 GUI 框架）
-- 数据库: PostgreSQL（通过 psycopg2-binary==2.9.9 驱动连接）
-- ORM: SQLAlchemy==2.0.23
-- 数据验证: Pydantic==2.5.0（v2 版本）
-- 数据库迁移: Alembic==1.12.1
-- 文件上传支持: python-multipart==0.0.6
-- 服务器: uvicorn==0.24.0（ASGI 服务器）
+- 后端: FastAPI==0.121.1（异步框架）
+- 前端: NiceGUI==3.2.0（Python 原生 GUI 框架）
+- 数据库: PostgreSQL（通过 psycopg2-binary==2.9.11 驱动连接）
+- ORM: SQLAlchemy==2.0.44
+- 数据验证: Pydantic==2.12.4（v2 版本）
+- 数据库迁移: Alembic==1.13.1
+- 文件上传支持: python-multipart==0.0.20
+- 服务器: uvicorn==0.38.0（ASGI 服务器）
 
 ## Docker 部署
 
@@ -50,20 +50,15 @@ docker-compose down
 
 - `DB_USER`: 数据库用户名 (默认: postgres)
 - `DB_PASSWORD`: 数据库密码 (默认: Huiteng888)
-- `DB_HOST`: 数据库主机地址 (默认: localhost)
+- `DB_HOST`: 数据库主机地址 (默认: db)
 - `DB_PORT`: 数据库端口 (默认: 5432)
 - `DB_NAME`: 数据库名称 (默认: QuizApplicationYT)
 
 在 docker-compose.yml 中修改这些环境变量以适应你的部署环境。
 
-## 传统部署方式
+## 本地开发
 
-### 环境要求
-
-- Python >= 3.8（推荐 3.9–3.11，以兼容所列库版本）
-- PostgreSQL 数据库
-
-### 安装步骤
+### 环境搭建
 
 ```bash
 # 1. 创建虚拟环境
@@ -77,7 +72,19 @@ venv\Scripts\activate
 
 # 3. 安装依赖
 pip install -r requirements.txt
+```
 
-# 4. 运行应用
+### 启动应用
+
+```bash
+# 启动 FastAPI/NiceGUI 服务
 uvicorn main:app --reload
+```
+
+访问地址: http://localhost:8000
+
+## 生产部署
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8001 --workers 4
 ```
