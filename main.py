@@ -799,7 +799,119 @@ def main_page(request: Request):
                                                     ui.label(str(user_item.id)).classes("w-16")
                                                     ui.label(user_item.username).classes("flex-1")
                                                     ui.label(user_item.role).classes("w-32")
-                                                    ui.label("").classes("w-32")  # 占位，未来可以添加编辑/删除功能
+                                                    
+                                                    # 添加操作按钮组
+                                                    with ui.row().classes("w-32"):
+                                                        # 添加修改密码按钮（仅超级管理员可见）
+                                                        if user and user.get("role") == "administrator":
+                                                            def make_change_password_handler(target_user_id, target_username):
+                                                                def change_password():
+                                                                    with ui.dialog() as change_password_dialog, ui.card():
+                                                                        ui.label(f"修改用户 {target_username} 的密码").classes("text-h6")
+                                                                        
+                                                                        # 新密码输入
+                                                                        new_password_input = ui.input(label="新密码", placeholder="输入新密码", password=True).classes("w-full")
+                                                                        confirm_password_input = ui.input(label="确认密码", placeholder="再次输入新密码", password=True).classes("w-full")
+                                                                        
+                                                                        # 状态标签
+                                                                        status_label = ui.label("").classes("w-full text-center mt-2")
+                                                                        
+                                                                        def confirm_change_password():
+                                                                            new_password = new_password_input.value
+                                                                            confirm_password = confirm_password_input.value
+                                                                            
+                                                                            # 验证输入
+                                                                            if not new_password:
+                                                                                status_label.set_text("密码不能为空")
+                                                                                return
+                                                                            
+                                                                            if len(new_password) < 3:
+                                                                                status_label.set_text("密码长度至少3位")
+                                                                                return
+                                                                            
+                                                                            if new_password != confirm_password:
+                                                                                status_label.set_text("两次输入的密码不一致")
+                                                                                return
+                                                                            
+                                                                            # 更新密码
+                                                                            db = SessionLocal()
+                                                                            try:
+                                                                                target_user = db.query(models.User).filter(models.User.id == target_user_id).first()
+                                                                                if target_user:
+                                                                                    target_user.set_password(new_password)
+                                                                                    db.commit()
+                                                                                    status_label.set_text("密码修改成功")
+                                                                                    ui.notify("密码修改成功", type="positive")
+                                                                                else:
+                                                                                    ui.notify("用户不存在", type="negative")
+                                                                            except Exception as e:
+                                                                                db.rollback()
+                                                                                logging.error(f"修改密码失败: {str(e)}")
+                                                                                status_label.set_text(f"修改密码失败: {str(e)}")
+                                                                                ui.notify(f"修改密码失败: {str(e)}", type="negative")
+                                                                            finally:
+                                                                                db.close()
+                                                                        
+                                                                        def cancel_change_password():
+                                                                            change_password_dialog.close()
+                                                                        
+                                                                        with ui.row():
+                                                                            ui.button("确认", on_click=confirm_change_password, color="primary")
+                                                                            ui.button("取消", on_click=cancel_change_password)
+                                                                    
+                                                                    change_password_dialog.open()
+                                                                
+                                                                return change_password
+                                                        
+                                                            ui.button("🔒", on_click=make_change_password_handler(user_item.id, user_item.username), color="blue").tooltip("修改密码")
+                                                        
+                                                        # 添加删除按钮
+                                                        def make_delete_user_handler(user_id):
+                                                            def delete_user():
+                                                                # 确认删除对话框
+                                                                with ui.dialog() as confirm_dialog, ui.card():
+                                                                    ui.label("确认删除用户").classes("text-h6")
+                                                                    ui.label("确定要删除这个用户吗？此操作不可撤销。").classes("mb-4")
+                                                                    
+                                                                    def confirm_delete():
+                                                                        db = SessionLocal()
+                                                                        try:
+                                                                            user_to_delete = db.query(models.User).filter(models.User.id == user_id).first()
+                                                                            if user_to_delete:
+                                                                                # 检查是否是最后一个管理员
+                                                                                if user_to_delete.role == "administrator":
+                                                                                    admin_count = db.query(models.User).filter(models.User.role == "administrator").count()
+                                                                                    if admin_count <= 1:
+                                                                                        ui.notify("不能删除最后一个管理员账户", type="negative")
+                                                                                        return
+                                                                                
+                                                                                db.delete(user_to_delete)
+                                                                                db.commit()
+                                                                                ui.notify("用户删除成功", type="positive")
+                                                                                # 重新加载用户列表
+                                                                                load_users()
+                                                                            else:
+                                                                                ui.notify("用户不存在", type="negative")
+                                                                        except Exception as e:
+                                                                            db.rollback()
+                                                                            logging.error(f"删除用户失败: {str(e)}")
+                                                                            ui.notify(f"删除用户失败: {str(e)}", type="negative")
+                                                                        finally:
+                                                                            db.close()
+                                                                        confirm_dialog.close()
+                                                                    
+                                                                    def cancel_delete():
+                                                                        confirm_dialog.close()
+                                                                    
+                                                                    with ui.row():
+                                                                        ui.button("确认", on_click=confirm_delete, color="negative")
+                                                                        ui.button("取消", on_click=cancel_delete)
+                                                            
+                                                                confirm_dialog.open()
+                                                            
+                                                            return delete_user
+                                                        
+                                                        ui.button("🗑️", on_click=make_delete_user_handler(user_item.id), color="red").tooltip("删除用户")
                                     except Exception as e:
                                         logging.error(f"加载用户列表失败: {str(e)}")
                                         ui.notify("加载用户列表失败", type="negative")
@@ -919,8 +1031,57 @@ def main_page(request: Request):
                                                     permissions_display = ", ".join(permissions) if permissions else "无权限"
                                                     ui.label(permissions_display).classes("flex-1")
                                                     
-                                                    # 操作按钮占位
-                                                    ui.label("").classes("w-32")
+                                                    # 添加删除按钮
+                                                    def make_delete_role_handler(role_id):
+                                                        def delete_role():
+                                                            # 确认删除对话框
+                                                            with ui.dialog() as confirm_dialog, ui.card():
+                                                                ui.label("确认删除角色").classes("text-h6")
+                                                                ui.label("确定要删除这个角色吗？此操作不可撤销。").classes("mb-4")
+                                                                
+                                                                def confirm_delete():
+                                                                    db = SessionLocal()
+                                                                    try:
+                                                                        role_to_delete = db.query(Role).filter(Role.id == role_id).first()
+                                                                        if role_to_delete:
+                                                                            # 检查是否是系统内置角色
+                                                                            if role_to_delete.name in ["administrator", "user"]:
+                                                                                ui.notify("不能删除系统内置角色", type="negative")
+                                                                                return
+                                                                                
+                                                                            # 检查是否有用户使用该角色
+                                                                            user_count = db.query(User).filter(User.role == role_to_delete.name).count()
+                                                                            if user_count > 0:
+                                                                                ui.notify("有用户正在使用该角色，无法删除", type="negative")
+                                                                                return
+                                                                            
+                                                                            db.delete(role_to_delete)
+                                                                            db.commit()
+                                                                            ui.notify("角色删除成功", type="positive")
+                                                                            # 重新加载角色列表
+                                                                            load_roles()
+                                                                        else:
+                                                                            ui.notify("角色不存在", type="negative")
+                                                                    except Exception as e:
+                                                                        db.rollback()
+                                                                        logging.error(f"删除角色失败: {str(e)}")
+                                                                        ui.notify(f"删除角色失败: {str(e)}", type="negative")
+                                                                    finally:
+                                                                        db.close()
+                                                                    confirm_dialog.close()
+                                                                
+                                                                def cancel_delete():
+                                                                    confirm_dialog.close()
+                                                                
+                                                                with ui.row():
+                                                                    ui.button("确认", on_click=confirm_delete, color="negative")
+                                                                    ui.button("取消", on_click=cancel_delete)
+                                                            
+                                                            confirm_dialog.open()
+                                                        
+                                                        return delete_role
+                                                    
+                                                    ui.button("🗑️", on_click=make_delete_role_handler(role.id), color="red").classes("w-32")
                                     except Exception as e:
                                         logging.error(f"加载角色列表失败: {str(e)}")
                                         ui.notify("加载角色列表失败", type="negative")
@@ -1039,10 +1200,10 @@ async def load_questions(container, user=None):
                                                 db.close()
                                                 logging.error(f"删除问题失败: {str(e)}")
                                                 ui.notify(f"删除问题失败: {str(e)}", type="negative")
-                                            return delete_handler
-                                        
-                                        ui.button("🗑️", on_click=make_delete_handler(question.id), 
-                                                 color="red").classes("text-sm")
+                                        return delete_handler
+                                    
+                                    ui.button("🗑️", on_click=make_delete_handler(question.id), 
+                                             color="red").classes("text-sm")
                                 else:
                                     ui.label("只读").classes("text-gray-400 text-sm")
     except Exception as e:
